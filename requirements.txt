@@ -1,0 +1,11 @@
+
+streamlit
+psycopg[binary]
+pgvector
+python-dotenv
+sentence-transformers
+pypdf
+python-docx
+langgraph
+langchain-core
+langchain-ollama

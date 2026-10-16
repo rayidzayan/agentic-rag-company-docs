@@ -1,0 +1,36 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+
+# Secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Python virtual environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local development files
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
+
+# Test and temporary files
+.pytest_cache/
+.coverage
+*.tmp
+
+# Database backups
+*.sql
+*.dump
