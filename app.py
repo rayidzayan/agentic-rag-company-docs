@@ -4,6 +4,49 @@ from pathlib import Path
 
 import streamlit as st
 
+# ---------- Portfolio UI styling ----------
+st.set_page_config(
+    page_title="Agentic RAG | Knowledge Assistant",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown("""
+<style>
+    .block-container {
+        padding-top: 1.8rem;
+        padding-bottom: 2.5rem;
+        max-width: 1400px;
+    }
+
+    [data-testid="stSidebar"] {
+        border-right: 1px solid rgba(128, 128, 128, 0.25);
+    }
+
+    div[data-testid="stMetric"] {
+        border: 1px solid rgba(128, 128, 128, 0.25);
+        padding: 16px;
+        border-radius: 12px;
+    }
+
+    div[data-testid="stButton"] > button {
+        border-radius: 8px;
+        font-weight: 600;
+        min-height: 2.6rem;
+    }
+
+    div[data-testid="stFileUploader"] {
+        border-radius: 10px;
+    }
+
+    h1, h2, h3 {
+        letter-spacing: -0.3px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
 from src.db import get_connection, initialize_database
 from src.ingest import ingest_file
 from src.agent import ask_agent
@@ -16,7 +59,13 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Company Knowledge AI")
+
+st.title("🧠 Agentic RAG Knowledge Assistant")
+st.caption(
+    "Ask questions about your documents • "
+    "Evidence-based retrieval • Local LLM • Evaluation dashboard"
+)
+
 st.caption("Agentic RAG · Local AI · PostgreSQL + pgvector")
 
 # Initialize PostgreSQL tables
@@ -168,21 +217,27 @@ with tab_qa:
 
 with tab_eval:
     st.subheader("RAG Evaluation Dashboard")
-
-    st.write(
-        "Run a repeatable test suite to measure answer correctness "
-        "and whether the retriever finds relevant passages."
+    st.caption(
+        "Measure answer correctness, retrieval performance, "
+        "and evidence-based abstention across repeatable test runs."
     )
 
     st.info(
-        "The evaluation runs four test questions against your indexed "
-        "documents. Make sure your sample HR policy is indexed first."
+        "Run the four-test evaluation suite against your indexed "
+        "sample HR policy. Results depend on the documents available "
+        "in your database."
     )
 
-    if st.button("▶ Run Evaluation", type="primary", key="run_eval"):
+    # Run evaluation
+    if st.button(
+        "▶ Run Evaluation",
+        type="primary",
+        key="run_eval",
+        use_container_width=True,
+    ):
         try:
             with st.spinner(
-                "Running evaluation tests. This may take a few minutes..."
+                "Evaluating answers, retrieval, and evidence sufficiency..."
             ):
                 evaluation = run_evaluation()
 
@@ -194,10 +249,14 @@ with tab_eval:
         except Exception as error:
             st.error(f"Evaluation failed: {error}")
 
+    # Latest evaluation results
     if "latest_evaluation" in st.session_state:
         evaluation = st.session_state["latest_evaluation"]
 
+        st.divider()
         st.markdown("### Latest Evaluation Results")
+
+        st.caption(f"Run ID: {evaluation['run_id']}")
 
         metric1, metric2, metric3, metric4 = st.columns(4)
 
@@ -205,42 +264,58 @@ with tab_eval:
             st.metric(
                 "Answer Accuracy",
                 f"{evaluation['answer_accuracy']:.0%}",
+                help="Share of test questions marked correct.",
             )
 
         with metric2:
             st.metric(
                 "Retrieval Hit Rate",
                 f"{evaluation['retrieval_hit_rate']:.0%}",
+                help="Share of tests where relevant passages were retrieved.",
             )
 
         with metric3:
             st.metric(
                 "Abstention Accuracy",
                 f"{evaluation['abstention_accuracy']:.0%}",
+                help="Performance on tests involving whether the agent should abstain.",
             )
 
         with metric4:
             st.metric(
                 "Tests Passed",
                 f"{evaluation['passed_tests']}/{evaluation['total_tests']}",
+                help="Tests passing the evaluator's pass criteria.",
             )
 
-        st.caption(f"Evaluation Run ID: {evaluation['run_id']}")
+        # Overall pass summary
+        total_tests = evaluation["total_tests"]
+        passed_tests = evaluation["passed_tests"]
+
+        if total_tests > 0:
+            pass_rate = passed_tests / total_tests
+            st.progress(
+                pass_rate,
+                text=f"Overall test pass rate: {pass_rate:.0%}",
+            )
+
+        st.markdown("### Test Case Results")
 
         display_results = []
 
         for test in evaluation["results"]:
             display_results.append({
-                "Test": test["test_id"],
+                "Test ID": test["test_id"],
                 "Question": test["question"],
-                "Answer Correct": (
-                    "PASS" if test["answer_correct"] else "FAIL"
+                "Answer": (
+                    "✅ PASS" if test["answer_correct"] else "❌ FAIL"
                 ),
-                "Retrieval Hit": (
-                    "PASS" if test["retrieval_hit"] else "FAIL"
+                "Retrieval": (
+                    "✅ HIT" if test["retrieval_hit"] else "❌ MISS"
                 ),
-                "Evidence Sufficient": (
-                    "Yes" if test["evidence_sufficient"] else "No"
+                "Evidence": (
+                    "Sufficient" if test["evidence_sufficient"]
+                    else "Insufficient"
                 ),
                 "Attempts": test["attempts"],
             })
@@ -251,15 +326,44 @@ with tab_eval:
             hide_index=True,
         )
 
-        with st.expander("View test answers"):
-            for test in evaluation["results"]:
-                st.markdown(f"**{test['test_id']}**")
-                st.write(test["question"])
-                st.write(test["answer"])
-                st.divider()
+        st.markdown("### Inspect Individual Answers")
 
+        for index, test in enumerate(evaluation["results"]):
+            label = f"{test['test_id']} — {test['question']}"
+
+            with st.expander(label):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("**Answer correctness**")
+                    if test["answer_correct"]:
+                        st.success("Passed")
+                    else:
+                        st.error("Failed")
+
+                with col2:
+                    st.markdown("**Evidence assessment**")
+                    if test["evidence_sufficient"]:
+                        st.success("Sufficient evidence")
+                    else:
+                        st.warning("Insufficient evidence")
+
+                st.markdown("**Generated answer**")
+                st.write(test["answer"])
+
+                st.caption(
+                    f"Retrieval attempts: {test['attempts']} · "
+                    f"Retrieval hit: "
+                    f"{'Yes' if test['retrieval_hit'] else 'No'}"
+                )
+
+    # Historical results
     st.divider()
     st.markdown("### Evaluation History")
+    st.caption(
+        "Compare saved evaluation runs to observe changes "
+        "in answer quality and retrieval performance."
+    )
 
     try:
         history = get_evaluation_history()
@@ -268,12 +372,14 @@ with tab_eval:
             history_display = [
                 {
                     "Run ID": row["Run ID"],
-                    "Started At": row["Started at"],
+                    "Started At": str(row["Started at"]),
                     "Tests": row["Total tests"],
                     "Passed": row["Passed tests"],
                     "Answer Accuracy": f"{row['Answer accuracy']:.0%}",
                     "Retrieval Hit Rate": f"{row['Retrieval hit rate']:.0%}",
-                    "Abstention Accuracy": f"{row['Abstention accuracy']:.0%}",
+                    "Abstention Accuracy": (
+                        f"{row['Abstention accuracy']:.0%}"
+                    ),
                 }
                 for row in history
             ]
@@ -286,7 +392,7 @@ with tab_eval:
 
             st.markdown("### Performance Across Evaluation Runs")
 
-            # Display runs from oldest to newest on the chart.
+            # Plot the oldest run first.
             chart_rows = sorted(
                 history,
                 key=lambda row: row["Run ID"],
@@ -297,12 +403,13 @@ with tab_eval:
                     "Run": str(row["Run ID"]),
                     "Answer Accuracy": row["Answer accuracy"] * 100,
                     "Retrieval Hit Rate": row["Retrieval hit rate"] * 100,
-                    "Abstention Accuracy": row["Abstention accuracy"] * 100,
+                    "Abstention Accuracy": (
+                        row["Abstention accuracy"] * 100
+                    ),
                 }
                 for row in chart_rows
             ]
 
-            
             st.line_chart(
                 chart_data,
                 x="Run",
@@ -310,19 +417,18 @@ with tab_eval:
                     "Answer Accuracy",
                     "Retrieval Hit Rate",
                     "Abstention Accuracy",
-                  ],
-                ) 
-
-
+                ],
+            )
 
         else:
-            st.info("No evaluation runs saved yet.")
+            st.info(
+                "No evaluation runs saved yet. Run the test suite "
+                "to create your first evaluation record."
+            )
 
     except Exception as error:
         st.error(f"Could not load evaluation history: {error}")
 
-
-# --------------------------------------------------
 # INDEXED DOCUMENTS
 # --------------------------------------------------
 
